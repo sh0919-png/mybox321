@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
-  <script src="/_sdk/element_sdk.js"></script>
-  <script src="/_sdk/data_sdk.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Outfit', sans-serif; }
-    body { box-sizing: border-box; margin: 0; }
+    body { box-sizing: border-box; margin: 0; background-color: #0f172a; color: #f8fafc; }
     .icon-circle { transition: transform 0.3s ease; }
     .home-icon-link:hover .icon-circle { transform: scale(1.1); }
     .home-icon-link:hover i { animation: wiggle 0.4s ease; }
@@ -76,160 +74,109 @@
   <script>
     lucide.createIcons();
 
-    // 1. 구글 시트 강제 연결 설정 (제공해주신 시트 ID)
-    const SHEET_ID = "1h4GjqgpIGJrz6b4GGyS83HvYJGMd6TFuYBKX9-o_aM0";
+    // 사용자의 구글 웹 앱 주소입니다.
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcT4WAEvoTVQAbXjXC3KcZfKrct-sLWKWapnjAtOwj8wwmKDESHeDd7TBqO3Q3No_vvQ/exec";
 
-    const defaultConfig = {
-      background_color: '#0f172a',
-      surface_color: '#1e293b',
-      text_color: '#f8fafc',
-      primary_action_color: '#38bdf8',
-      secondary_text_color: '#94a3b8',
-      font_family: 'Outfit',
-      font_size: 16,
-      page_title: 'My Homepage',
-      message_section_title: '메시지 보내기'
-    };
-
-    // UI 스타일 업데이트 함수
-    window.elementSdk.init({
-      defaultConfig,
-      onConfigChange: (config) => {
-        const bg = config.background_color || defaultConfig.background_color;
-        const surface = config.surface_color || defaultConfig.surface_color;
-        const text = config.text_color || defaultConfig.text_color;
-        const accent = config.primary_action_color || defaultConfig.primary_action_color;
-        
-        document.getElementById('app').style.backgroundColor = bg;
-        document.getElementById('page-title').style.color = text;
-        document.getElementById('page-title').textContent = config.page_title || defaultConfig.page_title;
-        document.getElementById('msg-title').textContent = config.message_section_title || defaultConfig.message_section_title;
-        document.getElementById('msg-title').style.color = text;
-        document.getElementById('replies-title').style.color = text;
-        document.getElementById('send-btn').style.backgroundColor = accent;
-        document.getElementById('send-btn').style.color = bg;
-      }
-    });
-
-    // 답변 목록 렌더링 (구글 시트 데이터 기반)
-    function renderReplies(data) {
-      const repliesList = document.getElementById('replies-list');
-      if (!data || data.length === 0) {
-        repliesList.innerHTML = '<p class="text-sm italic text-center py-4" style="color: #64748b;">메시지가 없습니다.</p>';
-        return;
-      }
-
-      const sortedData = [...data].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      repliesList.innerHTML = '';
-
-      sortedData.forEach((record) => {
-        const container = document.createElement('div');
-        container.className = 'p-4 rounded-lg flex flex-col gap-2 border-l-4 border-sky-400 bg-slate-900/50';
-
-        const header = document.createElement('div');
-        header.className = 'flex justify-between items-center';
-        header.innerHTML = `
-          <span class="text-xs font-bold text-sky-400 uppercase">${record.name || '익명'}</span>
-          <span class="text-[10px] text-slate-500">${record.created_at ? new Date(record.created_at).toLocaleDateString() : ''}</span>
-        `;
-
-        const userMsg = document.createElement('p');
-        userMsg.className = 'text-xs italic text-slate-400';
-        userMsg.textContent = `Q: ${record.message}`;
-
-        const adminReply = document.createElement('div');
-        adminReply.className = 'mt-1 p-2 rounded bg-slate-800/80';
-        
-        const replyText = record.reply && record.reply.trim() !== "" ? record.reply : "관리자의 답변을 기다리는 중입니다...";
-        adminReply.innerHTML = `
-          <span class="text-[10px] font-bold block mb-1 text-sky-400">ANSWER</span>
-          <p class="text-sm text-slate-200 leading-relaxed">${replyText}</p>
-        `;
-
-        container.appendChild(header);
-        container.appendChild(userMsg);
-        container.appendChild(adminReply);
-        repliesList.appendChild(container);
-      });
+    // 데이터 불러오기 함수
+    async function loadMessages() {
+        const listEl = document.getElementById('replies-list');
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const data = await response.json();
+            renderReplies(data);
+        } catch (e) {
+            console.error("로딩 에러:", e);
+            listEl.innerHTML = '<p class="text-sm text-red-400 text-center py-4">데이터를 불러오지 못했습니다.</p>';
+        }
     }
 
-    // 데이터 핸들러 및 SDK 초기화
-    const dataHandler = {
-      onDataChanged(newData) {
-        renderReplies(newData);
-      }
-    };
-
-    (async () => {
-      try {
-        // SDK 초기화 및 시트 연결
-        await window.dataSdk.init(dataHandler);
-        // 시트 ID 강제 연결 시도
-        if (window.dataSdk.connect) {
-          await window.dataSdk.connect(SHEET_ID);
+    // 화면에 답변 목록 그리기
+    function renderReplies(data) {
+        const listEl = document.getElementById('replies-list');
+        if (!data || data.length === 0) {
+            listEl.innerHTML = '<p class="text-sm text-slate-500 italic text-center py-4">메시지가 없습니다.</p>';
+            return;
         }
         
-        const res = await window.dataSdk.list();
-        if (res.isOk) renderReplies(res.data);
-      } catch (e) {
-        console.error("초기 로딩 에러:", e);
-      }
-    })();
+        // 최신 메시지가 위로 오도록 역순 정렬 후 표시
+        listEl.innerHTML = data.reverse().map(item => `
+            <div class="p-4 rounded-lg flex flex-col gap-2 border-l-4 border-sky-400 bg-slate-900/50">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-sky-400 uppercase">${item.name || '익명'}</span>
+                    <span class="text-[10px] text-slate-500">${item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
+                </div>
+                <p class="text-xs italic text-slate-400">Q: ${item.message || ''}</p>
+                <div class="mt-1 p-2 rounded bg-slate-800/80">
+                    <span class="text-[10px] font-bold block mb-1 text-sky-400">ANSWER</span>
+                    <p class="text-sm text-slate-200 leading-relaxed">${item.reply && item.reply.trim() !== "" ? item.reply : "관리자의 답변을 기다리는 중입니다..."}</p>
+                </div>
+            </div>
+        `).join('');
+    }
 
     // 메시지 전송 이벤트
     document.getElementById('msg-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('name-input').value.trim();
-      const message = document.getElementById('msg-input').value.trim();
+        e.preventDefault();
+        const btn = document.getElementById('send-btn');
+        const nameInput = document.getElementById('name-input');
+        const msgInput = document.getElementById('msg-input');
+        
+        const name = nameInput.value.trim();
+        const message = msgInput.value.trim();
 
-      if (!name || !message) {
-        showToast('이름과 내용을 입력해주세요.', true);
-        return;
-      }
+        if (!name || !message) {
+            showToast("이름과 내용을 입력해주세요.", true);
+            return;
+        }
 
-      const btn = document.getElementById('send-btn');
-      btn.disabled = true;
-      btn.textContent = '전송 중...';
+        btn.disabled = true;
+        btn.textContent = "전송 중...";
 
-      // 구글 시트에 데이터 추가
-      const result = await window.dataSdk.create({
-        name: name,
-        message: message,
-        reply: '', // 초기값은 빈값
-        created_at: new Date().toISOString()
-      });
-
-      btn.disabled = false;
-      btn.textContent = '보내기';
-
-      if (result.isOk) {
-        document.getElementById('name-input').value = '';
-        document.getElementById('msg-input').value = '';
-        showToast('전송 성공! 구글 시트를 확인하세요.');
-        // 목록 갱신
-        const updated = await window.dataSdk.list();
-        if(updated.isOk) renderReplies(updated.data);
-      } else {
-        showToast('전송 실패. 시트 설정을 확인하세요.', true);
-      }
+        try {
+            // 구글 시트로 데이터 전송
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ name, message })
+            });
+            
+            showToast("메시지가 성공적으로 전송되었습니다!");
+            nameInput.value = "";
+            msgInput.value = "";
+            
+            // 전송 후 목록 새로고침
+            setTimeout(loadMessages, 1000); 
+        } catch (e) {
+            console.error("전송 에러:", e);
+            showToast("전송에 실패했습니다.", true);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "보내기";
+        }
     });
 
-    // 새로고침 버튼
-    document.getElementById('refresh-btn').addEventListener('click', async () => {
-      const icon = document.querySelector('#refresh-btn i');
-      icon.style.animation = 'spin 1s linear infinite';
-      const res = await window.dataSdk.list();
-      if(res.isOk) renderReplies(res.data);
-      setTimeout(() => { icon.style.animation = 'none'; }, 1000);
-    });
-
+    // 토스트 알림 표시
     function showToast(msg, isError) {
-      const toast = document.getElementById('toast');
-      toast.textContent = msg;
-      toast.className = `mt-4 px-4 py-2.5 rounded-lg text-sm font-medium text-center toast-animation ${isError ? 'bg-red-900 text-red-200' : 'bg-emerald-900 text-emerald-200'}`;
-      toast.classList.remove('hidden');
-      setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.style.backgroundColor = isError ? '#7f1d1d' : '#065f46';
+        toast.style.color = isError ? '#fca5a5' : '#6ee7b7';
+        toast.classList.remove('hidden', 'toast-animation');
+        void toast.offsetWidth; // reflow trigger
+        toast.classList.add('toast-animation');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
     }
+
+    // 새로고침 버튼 클릭 이벤트
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+        const icon = document.querySelector('#refresh-btn i');
+        icon.style.animation = 'spin 1s linear infinite';
+        loadMessages().finally(() => {
+            setTimeout(() => { icon.style.animation = 'none'; }, 1000);
+        });
+    });
+    
+    // 페이지 접속 시 초기 데이터 로드
+    loadMessages();
   </script>
  </body>
 </html>
